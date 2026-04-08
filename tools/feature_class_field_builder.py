@@ -382,13 +382,14 @@ def main():
 
     all_items = text_items + double_items + long_items + short_items
 
+    ordered = []
     if not all_items:
         _warn(
             "No field definitions were provided.  "
             "The feature class will be created (if needed) with no additional fields."
         )
     else:
-        # Compress non-sequential / partial ranks
+        # Compress non-sequential / partial ranks then build final order once.
         compress_ranks(all_items)
         ordered = build_ordered_fields(all_items)
 
@@ -414,8 +415,7 @@ def main():
     # ------------------------------------------------------------------
     # Add fields
     # ------------------------------------------------------------------
-    if all_items:
-        ordered = build_ordered_fields(all_items)
+    if ordered:
         add_fields_to_fc(out_fc, ordered)
 
     # ------------------------------------------------------------------
