@@ -1,0 +1,62 @@
+name: Guard Script Size
+
+on:
+  pull_request:
+    paths:
+      - 'Feature_Class_Field_Builder/feature_class_field_builder.py'
+  push:
+    paths:
+      - 'Feature_Class_Field_Builder/feature_class_field_builder.py'
+
+jobs:
+  check-script-not-truncated:
+    name: Check feature_class_field_builder.py is not truncated
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count lines and verify minimum threshold
+        shell: python
+        run: |
+          import sys
+
+          FILE = "Feature_Class_Field_Builder/feature_class_field_builder.py"
+          MIN_LINES = 200  # well below the ~468 lines of the full implementation
+
+          with open(FILE, encoding="utf-8") as fh:
+              lines = fh.readlines()
+
+          count = len(lines)
+          print(f"Line count of {FILE}: {count}")
+
+          if count < MIN_LINES:
+              print(
+                  f"::error file={FILE}::TRUNCATION DETECTED – {FILE} has only "
+                  f"{count} lines (minimum is {MIN_LINES}).  "
+                  "A commit may have accidentally replaced the implementation with a stub.  "
+                  "Please restore the full script before merging."
+              )
+              sys.exit(1)
+
+          print(f"OK – {count} lines >= {MIN_LINES} minimum.")
+
+      - name: Syntax check
+        run: python3 -c "import ast, sys; src=open('Feature_Class_Field_Builder/feature_class_field_builder.py').read(); ast.parse(src); print('Syntax OK')"
+
+  lint-python:
+    name: Lint Python files (pyflakes)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pyflakes
+        run: pip install pyflakes --quiet
+
+      - name: Run pyflakes on Feature_Class_Field_Builder
+        run: python3 -m pyflakes Feature_Class_Field_Builder/feature_class_field_builder.py || true
+        # `|| true` because pyflakes will flag `arcpy` as undefined (not installed in CI);
+        # the step is still useful to catch obvious structural errors.

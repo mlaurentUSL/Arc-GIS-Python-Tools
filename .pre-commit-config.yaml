@@ -1,0 +1,50 @@
+# pre-commit configuration
+# -------------------------
+# Install pre-commit:  pip install pre-commit
+# Install hooks:       pre-commit install
+# Run manually:        pre-commit run --all-files
+#
+# See https://pre-commit.com for more information.
+
+repos:
+  # Standard hooks from the pre-commit project
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-ast          # Fail if Python files have invalid syntax
+      - id: end-of-file-fixer  # Ensure files end with a newline
+      - id: trailing-whitespace # Remove trailing whitespace
+      - id: check-merge-conflict # Detect leftover merge-conflict markers
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  # Local hook: warn if a critical script drops below a minimum line count
+  - repo: local
+    hooks:
+      - id: guard-script-size
+        name: Guard feature_class_field_builder.py against truncation
+        language: python
+        entry: python
+        args:
+          - -c
+          - |
+            import sys
+            FILE = "Feature_Class_Field_Builder/feature_class_field_builder.py"
+            MIN_LINES = 200
+            try:
+                with open(FILE, encoding="utf-8") as fh:
+                    count = sum(1 for _ in fh)
+            except FileNotFoundError:
+                print(f"WARNING: {FILE} not found – skipping size check.")
+                sys.exit(0)
+            if count < MIN_LINES:
+                print(
+                    f"\nERROR: {FILE} has only {count} lines "
+                    f"(minimum threshold: {MIN_LINES}).\n"
+                    "This looks like an accidental truncation or stub replacement.\n"
+                    "Please restore the full implementation before committing.\n"
+                )
+                sys.exit(1)
+            print(f"OK: {FILE} has {count} lines (>= {MIN_LINES}).")
+        pass_filenames: false
+        files: ^Feature_Class_Field_Builder/feature_class_field_builder\.py$
