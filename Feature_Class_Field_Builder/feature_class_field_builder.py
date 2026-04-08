@@ -11,24 +11,29 @@ existing feature class at that path.
 
 Parameters (as configured in the Script Tool)
 ----------------------------------------------
-0) out_fc          (Feature Class, Output)
+0) append          (Boolean, Checkbox)
+   If the output feature class already exists:
+     - Checked  -> append new fields to the existing dataset.
+     - Unchecked -> OVERWRITE: delete and recreate the feature class, then add fields.
+   If the output feature class does not exist, this setting is ignored.
+
+1) out_fc          (Feature Class, Output)
    Path to the new or existing feature class.
-   If the dataset already exists the tool appends fields and prints a notice.
 
-1) geometry_type   (String, Value List: POINT | POLYLINE | POLYGON)
+2) geometry_type   (String, Value List: POINT | POLYLINE | POLYGON)
    Geometry type used when creating a NEW feature class.
-   Ignored when out_fc already exists.
+   Ignored when out_fc already exists AND append is checked.
 
-2) text_fields     (String)
+3) text_fields     (String)
    Comma-separated field definition tokens for TEXT fields.
 
-3) double_fields   (String)
+4) double_fields   (String)
    Comma-separated field definition tokens for DOUBLE fields.
 
-4) long_fields     (String)
+5) long_fields     (String)
    Comma-separated field definition tokens for LONG fields.
 
-5) short_fields    (String)
+6) short_fields    (String)
    Comma-separated field definition tokens for SHORT fields.
 
 Field definition token format
@@ -84,7 +89,6 @@ import arcpy
 # ---------------------------------------------------------------------------
 def _msg(text):
     arcpy.AddMessage(str(text))
-
 
 def _warn(text):
     arcpy.AddWarning(str(text))
@@ -287,7 +291,7 @@ def ensure_feature_class(out_fc, geometry_type):
     if not workspace:
         raise arcpy.ExecuteError(
             "'out_fc' must include a workspace path "
-            "(e.g., C:\\\\MyProject.gdb\\\\Assets)."
+            "(e.g., C:\\MyProject.gdb\\Assets)."
         )
     if not arcpy.Exists(workspace):
         raise arcpy.ExecuteError(
@@ -349,12 +353,16 @@ def main():
     # ------------------------------------------------------------------
     # Read parameters
     # ------------------------------------------------------------------
-    out_fc = arcpy.GetParameterAsText(0)          # Feature Class (Output)
-    geometry_type = arcpy.GetParameterAsText(1)   # String value list
-    text_fields = arcpy.GetParameterAsText(2)     # String
-    double_fields = arcpy.GetParameterAsText(3)   # String
-    long_fields = arcpy.GetParameterAsText(4)     # String
-    short_fields = arcpy.GetParameterAsText(5)    # String
+    append_existing = arcpy.GetParameter(0)          # Boolean (Checkbox)
+    out_fc = arcpy.GetParameterAsText(1)             # Feature Class (Output)
+    geometry_type = arcpy.GetParameterAsText(2)      # String value list
+    text_fields = arcpy.GetParameterAsText(3)        # String
+    double_fields = arcpy.GetParameterAsText(4)      # String
+    long_fields = arcpy.GetParameterAsText(5)        # String
+    short_fields = arcpy.GetParameterAsText(6)       # String
+
+    # arcpy.GetParameter(0) can return None if the parameter isn't wired correctly.
+    append_existing = bool(append_existing)
 
     if not out_fc:
         raise arcpy.ExecuteError("Parameter 'out_fc' is required.")
@@ -369,6 +377,32 @@ def main():
         "IMPORTANT: This geoprocessing operation is NOT undoable in the "
         "way that edit operations are.  Verify your inputs before running."
     )
+
+    # ------------------------------------------------------------------
+    # Create / overwrite / append behavior
+    # ------------------------------------------------------------------
+    if arcpy.Exists(out_fc):
+        if append_existing:
+            _msg(
+                "Output feature class already exists: {fc}\n"
+                "Append is enabled; fields will be added to the existing dataset.  "
+                "The geometry type parameter is ignored.".format(fc=out_fc)
+            )
+        else:
+            _warn(
+                "Output feature class already exists: {fc}\n"
+                "Append is disabled; the existing dataset will be OVERWRITTEN "
+                "(deleted and recreated) before adding fields.".format(fc=out_fc)
+            )
+            try:
+                arcpy.management.Delete(out_fc)
+            except Exception:
+                # If Delete fails, let ArcPy surface the underlying geoprocessing error.
+                raise
+
+    # Ensure the feature class exists (create if needed). If we overwrote, it no
+    # longer exists, so this will create it.
+    ensure_feature_class(out_fc, geometry_type)
 
     # ------------------------------------------------------------------
     # Parse all field strings
@@ -408,11 +442,6 @@ def main():
             )
 
     # ------------------------------------------------------------------
-    # Create or confirm feature class
-    # ------------------------------------------------------------------
-    ensure_feature_class(out_fc, geometry_type)
-
-    # ------------------------------------------------------------------
     # Add fields
     # ------------------------------------------------------------------
     if ordered:
@@ -421,7 +450,7 @@ def main():
     # ------------------------------------------------------------------
     # Derive output parameter (required for Output parameter type)
     # ------------------------------------------------------------------
-    arcpy.SetParameterAsText(0, out_fc)
+    arcpy.SetParameterAsText(1, out_fc)
     _msg("Done.")
 
 
